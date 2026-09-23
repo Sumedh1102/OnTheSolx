@@ -6,7 +6,49 @@ set -euo pipefail
 
 : "${VERCEL_TOKEN:?VERCEL_TOKEN is required}" "${DATABASE_URL:?DATABASE_URL is required}"
 PROJECT_NAME="${PROJECT_NAME:-smashpoint-demo}"
+
+# Pasted secrets often carry a trailing newline or spaces, and Neon's "Connect" dialog offers
+# a `psql '<url>'` snippet: keep just the token / the connection URL.
+VERCEL_TOKEN=$(printf '%s' "$VERCEL_TOKEN" | tr -d '[:space:]')
+DB_URL=$(grep -oE "postgres(ql)?://[^'\"[:space:]]+" <<<"$DATABASE_URL" | head -n 1 || true)
+if [[ -z $DB_URL ]]; then
+  echo "::error::DATABASE_URL doesn't contain a postgres:// connection string. Copy the connection string from Neon (Connect → Connection string, pooling on) into the secret."
+  exit 1
+fi
+DATABASE_URL=$DB_URL
+
+echo "▶ Checking the Vercel token"
+vget() { curl -sS -o "$2" -w '%{http_code}' -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com$1" || echo 000; }
+USER_CODE=$(vget /v2/user /tmp/vercel-user.json)
+TEAMS_CODE=$(vget /v2/teams /tmp/vercel-teams.json)
+if [[ $USER_CODE == 200 ]]; then
+  echo "  token belongs to: $(jq -r '.user.username // .user.email // "?"' /tmp/vercel-user.json)"
+else
+  echo "  /v2/user → HTTP $USER_CODE $(jq -c '.error // {}' /tmp/vercel-user.json 2>/dev/null || true)"
+fi
+if [[ $TEAMS_CODE == 200 ]]; then
+  echo "  teams: $(jq -r '[.teams[]?.slug] | if length == 0 then "(none)" else join(", ") end' /tmp/vercel-teams.json)"
+else
+  echo "  /v2/teams → HTTP $TEAMS_CODE $(jq -c '.error // {}' /tmp/vercel-teams.json 2>/dev/null || true)"
+fi
+if [[ $USER_CODE != 200 && $TEAMS_CODE != 200 ]]; then
+  reason=$(jq -r '.error.message // empty' /tmp/vercel-user.json 2>/dev/null || true)
+  echo "::error::Vercel rejected VERCEL_TOKEN${reason:+ ($reason)}. Create a new token at https://vercel.com/account/tokens (scope: your Hobby team, expiry in the future), copy it exactly, and replace the VERCEL_TOKEN repository secret."
+  exit 1
+fi
+
+# Deploy into the token's team: an explicit VERCEL_SCOPE, else the account's default team,
+# else the first team the token can see (a team-scoped token can't create personal projects).
+SCOPE="${VERCEL_SCOPE:-}"
+if [[ -z $SCOPE && $TEAMS_CODE == 200 ]]; then
+  DEFAULT_TEAM=$(jq -r '.user.defaultTeamId // empty' /tmp/vercel-user.json 2>/dev/null || true)
+  SCOPE=$(jq -r --arg d "$DEFAULT_TEAM" '(.teams // []) as $t | (($t | map(select(.id == $d)) | .[0].slug) // $t[0].slug) // empty' /tmp/vercel-teams.json)
+fi
 V=(vercel --token "$VERCEL_TOKEN")
+if [[ -n $SCOPE ]]; then
+  V+=(--scope "$SCOPE")
+  echo "  deploying into team: $SCOPE"
+fi
 
 echo "▶ Linking Vercel project '$PROJECT_NAME'"
 if ! "${V[@]}" link --yes --project "$PROJECT_NAME" >/dev/null; then

@@ -2,7 +2,8 @@
 # Setup (once): add repository secrets
 #   VERCEL_TOKEN  a Vercel access token (vercel.com → Account Settings → Tokens)
 #   DATABASE_URL  pooled Postgres connection string for the DEMO database (e.g. Neon, Mumbai)
-# Optional repository variable VERCEL_PROJECT_NAME (default: smashpoint-demo).
+# Optional repository variables: VERCEL_PROJECT_NAME (default: smashpoint-demo) and
+# VERCEL_SCOPE (team slug; default: the token's default team).
 # Every push to the branch redeploys; the nightly job reloads fresh demo data.
 name: Deploy demo
 
@@ -27,6 +28,7 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       PROJECT_NAME: ${{ vars.VERCEL_PROJECT_NAME || 'smashpoint-demo' }}
+      VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE }}
     steps:
       - name: Check configuration
         id: config
