@@ -30,10 +30,25 @@ jobs:
     steps:
       - name: Check configuration
         id: config
+        env:
+          TOKEN_IN_VARS: ${{ vars.VERCEL_TOKEN != '' }}
+          DB_IN_VARS: ${{ vars.DATABASE_URL != '' }}
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
-          if [ -z "$VERCEL_TOKEN" ] || [ -z "$DATABASE_URL" ]; then
-            echo "::notice::Add the VERCEL_TOKEN and DATABASE_URL repository secrets to deploy the demo. Skipping."
+          missing=0
+          for name in VERCEL_TOKEN DATABASE_URL; do
+            if [ -n "${!name}" ]; then echo "$name: found in repository secrets"; continue; fi
+            missing=1
+            if { [ "$name" = VERCEL_TOKEN ] && [ "$TOKEN_IN_VARS" = true ]; } || { [ "$name" = DATABASE_URL ] && [ "$DB_IN_VARS" = true ]; }; then
+              echo "::error::$name was saved as a repository VARIABLE. Delete it there and add it under Settings → Secrets and variables → Actions → Secrets → New repository secret."
+            else
+              echo "::warning::$name is not a repository secret this workflow can read (Settings → Secrets and variables → Actions → Secrets tab; not Codespaces/Dependabot or an environment)."
+            fi
+          done
+          if [ "$missing" = 1 ]; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
+            # A manual run means someone wants a deploy, so make the problem visible.
+            if [ "$MANUAL" = true ]; then exit 1; fi
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
