@@ -25,6 +25,25 @@ selected without keys). The reason is printed in the logs.
 A demo deployment shows the demo accounts (password `SmashPoint@123`) on the login page, so
 anyone can sign in as admin and change the demo data. Don't put real people's data in it.
 
+## Public demo, deployed by GitHub Actions
+
+`.github/workflows/deploy-demo.yml` deploys the demo to Vercel without connecting Vercel to
+GitHub. It creates the Vercel project if needed, sets the demo environment (generating
+`AUTH_SECRET` and `CRON_SECRET` once), deploys, and smoke-tests the live URL. The run summary
+shows the address.
+
+1. Create a Postgres database for the demo (e.g. Neon, region *AWS Asia Pacific (Mumbai)*) and
+   copy its **pooled** connection string.
+2. Create a Vercel access token (vercel.com → Account Settings → Tokens).
+3. In GitHub → Settings → Secrets and variables → Actions, add repository secrets
+   `DATABASE_URL` and `VERCEL_TOKEN`.
+4. Run the **Deploy demo** workflow (Actions tab → Run workflow). After that, every push to the
+   branch redeploys.
+
+The first build loads the demo academy into the empty database. A nightly job (03:00 IST)
+reloads it, so dates stay current and visitors' changes are undone; it refuses to touch a
+database that wasn't created as a demo.
+
 ## Option A: Vercel + Neon (recommended)
 
 Both have free tiers and Mumbai regions, which keeps pages fast for players in Palghar.

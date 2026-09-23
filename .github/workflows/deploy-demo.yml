@@ -1,0 +1,77 @@
+# Public demo on Vercel, deployed from GitHub Actions.
+# Setup (once): add repository secrets
+#   VERCEL_TOKEN  a Vercel access token (vercel.com → Account Settings → Tokens)
+#   DATABASE_URL  pooled Postgres connection string for the DEMO database (e.g. Neon, Mumbai)
+# Optional repository variable VERCEL_PROJECT_NAME (default: smashpoint-demo).
+# Every push to the branch redeploys; the nightly job reloads fresh demo data.
+name: Deploy demo
+
+on:
+  push:
+    branches: [claude/intelligent-curie-qvjv33, main]
+    paths-ignore: ["docs/**", "**/*.md"]
+  workflow_dispatch:
+  schedule:
+    - cron: "30 21 * * *" # 03:00 IST
+
+concurrency:
+  group: deploy-demo
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PROJECT_NAME: ${{ vars.VERCEL_PROJECT_NAME || 'smashpoint-demo' }}
+    steps:
+      - name: Check configuration
+        id: config
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$DATABASE_URL" ]; then
+            echo "::notice::Add the VERCEL_TOKEN and DATABASE_URL repository secrets to deploy the demo. Skipping."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.config.outputs.ready == 'true'
+        uses: actions/checkout@v4
+      - if: steps.config.outputs.ready == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - if: steps.config.outputs.ready == 'true'
+        name: Install Vercel CLI
+        run: npm install --global vercel@latest
+      - if: steps.config.outputs.ready == 'true'
+        name: Deploy and smoke-test
+        run: bash .github/scripts/deploy-vercel-demo.sh
+
+  reset-demo-data:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Check configuration
+        id: config
+        run: |
+          if [ -z "$DATABASE_URL" ]; then echo "ready=false" >> "$GITHUB_OUTPUT"; else echo "ready=true" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.config.outputs.ready == 'true'
+        uses: actions/checkout@v4
+      - if: steps.config.outputs.ready == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.config.outputs.ready == 'true'
+        run: npm ci
+      # Reloads the demo academy (fresh dates, undoes visitors' changes). The seed refuses to
+      # run unless the database was created as a demo, so it can't wipe real data.
+      - if: steps.config.outputs.ready == 'true'
+        name: Reload demo data
+        run: npm run db:seed
