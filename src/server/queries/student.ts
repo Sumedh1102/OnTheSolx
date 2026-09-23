@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, count, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   attendanceRecords,
@@ -157,13 +157,13 @@ export async function getUserBookings(userId: string, opts: { upcoming?: boolean
   });
 }
 
-export async function getPaymentsFor(opts: { userId: string; studentIds: string[] }, limit = 10) {
-  const conds = [eq(payments.userId, opts.userId)];
-  if (opts.studentIds.length) conds.push(inArray(payments.studentId, opts.studentIds));
+export async function getPaymentsFor(opts: { userId?: string; studentIds: string[] }, limit = 10) {
+  const owner = or(opts.userId ? eq(payments.userId, opts.userId) : undefined, opts.studentIds.length ? inArray(payments.studentId, opts.studentIds) : undefined);
+  if (!owner) return [];
   return db
     .select()
     .from(payments)
-    .where(and(sql`(${sql.join(conds, sql` OR `)})`, inArray(payments.status, ["PAID", "REFUNDED"])))
+    .where(and(owner, inArray(payments.status, ["PAID", "REFUNDED"])))
     .orderBy(desc(payments.createdAt))
     .limit(limit);
 }
