@@ -142,9 +142,11 @@ export default async function HomePage() {
           }
         />
         {programs.length ? (
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+          <div className="scrollbar-none -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-3 md:mx-0 md:grid md:grid-cols-2 md:gap-6 md:overflow-visible md:px-0 md:pb-0 xl:grid-cols-4">
             {programs.map((p) => (
-              <ProgramCard key={p.id} program={p} />
+              <div key={p.id} className="w-[85%] shrink-0 snap-start md:w-auto">
+                <ProgramCard program={p} />
+              </div>
             ))}
           </div>
         ) : (
@@ -210,9 +212,11 @@ export default async function HomePage() {
             </ButtonLink>
           }
         />
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="scrollbar-none -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-3 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-6 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-4">
           {coaches.slice(0, 4).map((c, i) => (
-            <CoachCard key={c.id} coach={c} index={i} />
+            <div key={c.id} className="w-[78%] shrink-0 snap-start sm:w-auto">
+              <CoachCard coach={c} index={i} />
+            </div>
           ))}
         </div>
       </Section>
@@ -297,9 +301,11 @@ export default async function HomePage() {
       {/* ── Testimonials ─────────────────────────────────────────────────── */}
       <Section className="border-y-3 border-ink bg-white/70">
         <SectionHeading index="09" eyebrow="Testimonials" title="Heard on court." />
-        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+        <div className="scrollbar-none -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-3 md:mx-0 md:grid md:grid-cols-2 md:gap-5 md:overflow-visible md:px-0 md:pb-0 lg:grid-cols-3">
           {testimonials.map((t, i) => (
-            <TestimonialCard key={t.name} {...t} index={i} />
+            <div key={t.name} className="w-[85%] shrink-0 snap-start md:w-auto">
+              <TestimonialCard {...t} index={i} />
+            </div>
           ))}
         </div>
       </Section>

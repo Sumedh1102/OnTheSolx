@@ -11,7 +11,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <Logo inverted />
         <div>
           <p className="font-mono text-xs font-bold uppercase tracking-widest text-white/80">Member portal</p>
-          <h1 className="mt-4 text-6xl font-extrabold leading-[0.92] xl:text-7xl">Your game, all in one place.</h1>
+          <p className="mt-4 font-display text-6xl font-extrabold leading-[0.92] tracking-tight xl:text-7xl">Your game, all in one place.</p>
           <p className="mt-5 max-w-md text-lg text-white/85">Bookings, attendance, membership, skill scores and receipts — for players, parents and staff.</p>
         </div>
         <div className="relative">

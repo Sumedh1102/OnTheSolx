@@ -134,7 +134,7 @@ export default async function StudentsPage({ searchParams }: PageProps<"/dashboa
                         )}
                       </TD>
                       <TD>{m ? <StatusBadge status={m.paymentStatus} /> : <span className="text-muted">—</span>}</TD>
-                      <TD className="text-sm">
+                      <TD className="whitespace-nowrap text-sm">
                         {s.phone ?? s.parentPhone ?? "—"}
                         {s.parentName ? <span className="block text-xs text-muted">{s.parentName}</span> : null}
                       </TD>

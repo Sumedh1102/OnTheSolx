@@ -384,6 +384,10 @@ function SlotButton({ slot, selected, onClick, compact, courtName }: { slot: Slo
   );
 }
 
+function inMaintenance(c: AvailabilityResult["courts"][number]) {
+  return c.courtStatus === "MAINTENANCE" || (c.slots.length > 0 && c.slots.every((s) => s.state === "MAINTENANCE"));
+}
+
 /** Desktop: times down the side, courts across the top. */
 function SlotGrid({ availability, selection, onSelect }: { availability: AvailabilityResult; selection: Selection; onSelect: (courtId: string, slot: Slot) => void }) {
   const cols = availability.courts.length;
@@ -391,14 +395,15 @@ function SlotGrid({ availability, selection, onSelect }: { availability: Availab
     <div className="overflow-x-auto">
       <div className="grid min-w-[640px] gap-2" style={{ gridTemplateColumns: `4.5rem repeat(${cols}, minmax(0, 1fr))` }} role="grid" aria-label="Court availability">
         <div />
-        {availability.courts.map((c) => (
-          <div key={c.courtId} className={cn("rounded-xl border-2 border-ink px-2 py-2 text-center", c.courtStatus === "MAINTENANCE" ? "bg-warning-soft" : "bg-ink text-white")} role="columnheader">
-            <p className="font-display font-extrabold leading-tight">{c.courtName}</p>
-            <p className={cn("text-[11px] font-bold", c.courtStatus === "MAINTENANCE" ? "text-ink" : "text-white/70")}>
-              {c.courtStatus === "MAINTENANCE" ? "Maintenance" : `${c.availableCount} open`}
-            </p>
-          </div>
-        ))}
+        {availability.courts.map((c) => {
+          const maint = inMaintenance(c);
+          return (
+            <div key={c.courtId} className={cn("rounded-xl border-2 border-ink px-2 py-2 text-center", maint ? "bg-warning-soft" : "bg-ink text-white")} role="columnheader">
+              <p className="font-display font-extrabold leading-tight">{c.courtName}</p>
+              <p className={cn("text-[11px] font-bold", maint ? "text-ink" : "text-white/70")}>{maint ? "Maintenance" : `${c.availableCount} open`}</p>
+            </div>
+          );
+        })}
         {availability.times.map((t, row) => (
           <div key={t.startMinute} className="contents" role="row">
             <div className="flex flex-col justify-center pr-1 text-right font-mono text-xs font-bold text-muted" role="rowheader">
@@ -453,11 +458,11 @@ function SlotList({
             onClick={() => onCourt(c.courtId)}
             className={cn(
               "shrink-0 rounded-xl border-[2.5px] border-ink px-3.5 py-2 text-left transition",
-              c.courtId === active.courtId ? "bg-ink text-white" : c.courtStatus === "MAINTENANCE" ? "bg-warning-soft" : "bg-white",
+              c.courtId === active.courtId ? "bg-ink text-white" : inMaintenance(c) ? "bg-warning-soft" : "bg-white",
             )}
           >
             <span className="block font-display font-extrabold leading-tight">{c.courtName}</span>
-            <span className="text-[11px] font-bold opacity-75">{c.courtStatus === "MAINTENANCE" ? "Maintenance" : `${c.availableCount} open`}</span>
+            <span className="text-[11px] font-bold opacity-75">{inMaintenance(c) ? "Maintenance" : `${c.availableCount} open`}</span>
           </button>
         ))}
       </div>

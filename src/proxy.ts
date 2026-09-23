@@ -16,13 +16,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if ((pathname === "/login" || pathname === "/register") && claims) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
+  // Note: /login and /register check the session against the database themselves. Doing it
+  // here from the token alone would loop for revoked sessions (token valid, session gone).
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login", "/register"],
+  matcher: ["/dashboard/:path*"],
 };
