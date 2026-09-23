@@ -1,0 +1,43 @@
+# Diagnostics for the live demo from GitHub's network: fetches pages (status, key headers,
+# start of the body) while tailing the deployment's runtime logs.
+name: Probe demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Base URL, e.g. https://smashpoint-demo.vercel.app
+        required: true
+      paths:
+        description: Space-separated paths to fetch
+        default: /api/health / /login /book
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      URL: ${{ inputs.url }}
+      PATHS: ${{ inputs.paths }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Fetch pages and tail runtime logs
+        run: |
+          URL="${URL%/}"
+          if [ -n "$VERCEL_TOKEN" ]; then
+            npm install --global vercel@latest >/dev/null 2>&1 || true
+            (timeout 60 vercel logs "$URL" --token "$VERCEL_TOKEN" > runtime.log 2>&1 || true) &
+            sleep 10
+          fi
+          for p in $PATHS; do
+            echo "=================== GET $URL$p"
+            curl -sS -D headers.txt -o body.txt --max-time 40 -w "time %{time_total}s\n" "$URL$p" || true
+            grep -iE "^(HTTP/|x-vercel-|location:|content-type:|x-matched-path|server:)" headers.txt || true
+            echo "--- body (first 1500 bytes)"
+            head -c 1500 body.txt; echo
+          done
+          if [ -n "$VERCEL_TOKEN" ]; then
+            sleep 25; wait || true
+            echo "=================== runtime logs"
+            tail -n 120 runtime.log || true
+          fi

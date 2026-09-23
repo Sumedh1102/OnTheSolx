@@ -151,13 +151,18 @@ for i in $(seq 1 30); do
     echo "  /api/health → ok"
     break
   fi
-  if [[ $i == 30 ]]; then echo "Health check failed at $SITE/api/health"; exit 1; fi
+  if [[ $i == 30 ]]; then
+    echo "Health check failed at $SITE/api/health. Last response:"
+    curl -sS -D - --max-time 30 "$SITE/api/health" 2>&1 | head -c 2000 || true
+    echo
+    exit 1
+  fi
   sleep 5
 done
 for path in / /book /coaching /login; do
   code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$SITE$path")
   echo "  $path → $code"
-  if [[ $code != 200 ]]; then exit 1; fi
+  if [[ $code != 200 ]]; then curl -sS --max-time 30 "$SITE$path" 2>&1 | head -c 1500 || true; echo; exit 1; fi
 done
 
 echo "✅ Live: $SITE"
