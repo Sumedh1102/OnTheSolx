@@ -1,5 +1,6 @@
 # Diagnostics for the live demo from GitHub's network: fetches pages (status, key headers,
-# start of the body) while tailing the deployment's runtime logs.
+# start of the body), lists the Vercel project's environment variables (names, targets and
+# value lengths only, never values) and prints the production deployment's runtime logs.
 name: Probe demo
 
 on:
@@ -11,6 +12,9 @@ on:
       paths:
         description: Space-separated paths to fetch
         default: /api/health / /login /book
+      project:
+        description: Vercel project name
+        default: smashpoint-demo
 
 jobs:
   probe:
@@ -19,25 +23,40 @@ jobs:
     env:
       URL: ${{ inputs.url }}
       PATHS: ${{ inputs.paths }}
+      PROJECT: ${{ inputs.project }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
-      - name: Fetch pages and tail runtime logs
+      - name: Probe
         run: |
           URL="${URL%/}"
+          VERCEL_TOKEN=$(printf '%s' "$VERCEL_TOKEN" | tr -d '[:space:]')
+          api() { curl -sS --max-time 20 -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com$1"; }
+
           if [ -n "$VERCEL_TOKEN" ]; then
-            npm install --global vercel@latest >/dev/null 2>&1 || true
-            (timeout 60 vercel logs "$URL" --token "$VERCEL_TOKEN" > runtime.log 2>&1 || true) &
-            sleep 10
+            TEAM=$(api /v5/user/tokens/current | jq -r '[.token.scopes[]? | select(.type == "team") | .teamId][0] // empty')
+            Q=${TEAM:+teamId=$TEAM}
+            PROJECT_ID=$(api "/v9/projects/$PROJECT?$Q" | jq -r '.id // empty')
+            echo "project: $PROJECT ($PROJECT_ID) team: ${TEAM:-personal}"
+            echo "=================== environment variables (no values)"
+            api "/v9/projects/$PROJECT_ID/env?$Q&decrypt=true" | jq -r '.envs[]? | "\(.key)\ttype=\(.type)\ttarget=\(.target | tostring)\tlength=\((.value // "") | length)\(if ((.value // "") | test("^change-me")) then "\tPLACEHOLDER" else "" end)"'
+            DEPLOYMENT=$(api "/v6/deployments?projectId=$PROJECT_ID&target=production&limit=1&$Q" | jq -r '.deployments[0].uid // empty')
+            echo "latest production deployment: $DEPLOYMENT"
+            # Stream runtime logs in the background while we make requests.
+            (curl -sS -N --max-time 45 -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v1/projects/$PROJECT_ID/deployments/$DEPLOYMENT/runtime-logs?$Q" > runtime.ndjson 2>&1 || true) &
+            sleep 4
           fi
+
           for p in $PATHS; do
             echo "=================== GET $URL$p"
             curl -sS -D headers.txt -o body.txt --max-time 40 -w "time %{time_total}s\n" "$URL$p" || true
-            grep -iE "^(HTTP/|x-vercel-|location:|content-type:|x-matched-path|server:)" headers.txt || true
-            echo "--- body (first 1500 bytes)"
-            head -c 1500 body.txt; echo
+            grep -iE "^(HTTP/|x-vercel-id|location:|content-type:|x-matched-path)" headers.txt || true
+            echo "--- body (first 600 bytes)"
+            head -c 600 body.txt; echo
           done
+
           if [ -n "$VERCEL_TOKEN" ]; then
-            sleep 25; wait || true
+            wait || true
             echo "=================== runtime logs"
-            tail -n 120 runtime.log || true
+            jq -r 'select(type == "object") | "\(.level // "") \(.requestMethod // "") \(.requestPath // "") \(.responseStatusCode // "") | \(.message // "" | .[0:1500])"' runtime.ndjson 2>/dev/null | tail -n 80 || head -c 4000 runtime.ndjson
           fi
