@@ -5,6 +5,7 @@ import { runCheckout } from "@/components/payments/checkout";
 import { FormMessage } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
 import type { CheckoutInstruction } from "@/server/payments/types";
+import { submitWithoutReset } from "@/components/forms/submit-without-reset";
 
 type Result = { ok: true; message?: string; data?: { checkout: CheckoutInstruction } } | { ok: false; error: string };
 
@@ -18,7 +19,7 @@ export function CheckoutForm({ action, children, className }: { action: (prev: R
     else if (!state.ok) toast.error("Couldn't start payment", state.error);
   }, [state, toast]);
   return (
-    <form action={formAction} className={className}>
+    <form onSubmit={submitWithoutReset(formAction)} className={className}>
       {children}
       {state && !state.ok ? (
         <div className="mt-3">

@@ -1,5 +1,7 @@
 import "server-only";
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { sql } from "drizzle-orm";
+import { db } from "@/server/db";
 
 const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"; // no 0/O/1/I/L
 
@@ -37,18 +39,24 @@ export const bookingAccessToken = (code: string) => signValue(code, "booking");
 export const verifyBookingAccess = (code: string, token: string | null | undefined) =>
   verifySignedValue(code, "booking", token);
 
-/** Minimal in-memory rate limiter (per process). Swap for Redis/Upstash when running multiple instances. */
-const buckets = new Map<string, { count: number; resetAt: number }>();
-export function rateLimit(key: string, limit: number, windowMs: number): { ok: boolean; retryAfterMs: number } {
-  const now = Date.now();
-  const bucket = buckets.get(key);
-  if (!bucket || bucket.resetAt < now) {
-    buckets.set(key, { count: 1, resetAt: now + windowMs });
-    if (buckets.size > 10_000) {
-      for (const [k, b] of buckets) if (b.resetAt < now) buckets.delete(k);
-    }
-    return { ok: true, retryAfterMs: 0 };
-  }
-  bucket.count++;
-  return bucket.count > limit ? { ok: false, retryAfterMs: bucket.resetAt - now } : { ok: true, retryAfterMs: 0 };
+export const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
+
+/**
+ * Fixed-window rate limiter backed by Postgres, so limits hold across every server
+ * instance (serverless functions, multiple containers). One atomic upsert per call;
+ * keys are hashed so emails/IPs aren't stored in clear. Expired rows are purged by the
+ * scheduled jobs.
+ */
+export async function rateLimit(key: string, limit: number, windowMs: number): Promise<{ ok: boolean; retryAfterMs: number }> {
+  const hashed = `${key.split(":")[0]}:${sha256(key)}`.slice(0, 200);
+  const result = await db.execute<{ count: number; reset_at: Date | string }>(sql`
+    insert into rate_limits (key, count, reset_at)
+    values (${hashed}, 1, now() + make_interval(secs => ${windowMs / 1000}))
+    on conflict (key) do update set
+      count = case when rate_limits.reset_at <= now() then 1 else rate_limits.count + 1 end,
+      reset_at = case when rate_limits.reset_at <= now() then excluded.reset_at else rate_limits.reset_at end
+    returning count, reset_at`);
+  const row = result.rows[0]!;
+  const retryAfterMs = Math.max(0, new Date(row.reset_at).getTime() - Date.now());
+  return row.count > limit ? { ok: false, retryAfterMs } : { ok: true, retryAfterMs: 0 };
 }

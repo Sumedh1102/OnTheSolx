@@ -74,7 +74,7 @@ export async function AdminDashboard({ user }: { user: SessionUser }) {
       </section>
 
       <section className="mt-6" aria-label="Quick actions">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 min-[1400px]:grid-cols-6">
           {QUICK_ACTIONS.filter((a) => can(user.role, a.permission)).map((a) => (
             <Link key={a.label} href={a.href} className="flex items-center gap-3 rounded-2xl border-[2.5px] border-ink bg-white px-4 py-3 font-display font-extrabold shadow-brutal-xs transition hover:-translate-y-0.5 hover:bg-brand-50 hover:shadow-brutal-sm">
               <span className="grid size-9 shrink-0 place-items-center rounded-lg border-2 border-ink bg-brand text-white">

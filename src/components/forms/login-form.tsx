@@ -6,6 +6,7 @@ import { LogIn } from "lucide-react";
 import { login } from "@/server/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Field, FormMessage, Input } from "@/components/ui/form";
+import { submitWithoutReset } from "@/components/forms/submit-without-reset";
 
 const DEMO = [
   { role: "Admin", email: "admin@smashpoint.in" },
@@ -23,7 +24,7 @@ export function LoginForm({ next, showDemo }: { next?: string; showDemo: boolean
 
   return (
     <>
-      <form ref={form} action={action} className="grid gap-4" noValidate>
+      <form ref={form} onSubmit={submitWithoutReset(action)} className="grid gap-4" noValidate>
         <input type="hidden" name="next" value={next ?? ""} />
         <Field label="Email" htmlFor="email" error={errors?.email}>
           <Input id="email" name="email" type="email" autoComplete="email" required autoFocus aria-invalid={!!errors?.email} />
@@ -31,6 +32,9 @@ export function LoginForm({ next, showDemo }: { next?: string; showDemo: boolean
         <Field label="Password" htmlFor="password" error={errors?.password}>
           <Input id="password" name="password" type="password" autoComplete="current-password" required aria-invalid={!!errors?.password} />
         </Field>
+        <Link href="/forgot-password" className="-mt-2 justify-self-end text-sm font-bold underline hover:text-brand">
+          Forgot password?
+        </Link>
         {state && !state.ok && !errors ? <FormMessage>{state.error}</FormMessage> : null}
         <Button type="submit" size="lg" loading={pending} icon={<LogIn className="size-4" />}>
           Sign in

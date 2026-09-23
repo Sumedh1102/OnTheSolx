@@ -15,6 +15,13 @@
       "when": 1790165956047,
       "tag": "0001_booking_constraints",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790179179894,
+      "tag": "0002_production_hardening",
+      "breakpoints": true
     }
   ]
 }

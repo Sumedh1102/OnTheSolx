@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: smashpoint
+          POSTGRES_PASSWORD: smashpoint
+          POSTGRES_DB: smashpoint
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U smashpoint"
+          --health-interval 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://smashpoint:smashpoint@localhost:5432/smashpoint
+      AUTH_SECRET: ci-only-secret-not-used-anywhere-else-0123456789
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      - name: Migrations + demo seed on a fresh database
+        run: npm run db:deploy
+        env:
+          SEED_DEMO_DATA: "true"
+      - name: Production build
+        run: npm run build

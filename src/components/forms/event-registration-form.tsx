@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FormMessage, Input, Select } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
 import { formatMoney } from "@/lib/format";
+import { submitWithoutReset } from "@/components/forms/submit-without-reset";
 
 export function EventRegistrationForm({
   eventId,
@@ -50,7 +51,7 @@ export function EventRegistrationForm({
 
   const errors = state && !state.ok ? state.fieldErrors : undefined;
   return (
-    <form action={action} className="grid gap-4" noValidate>
+    <form onSubmit={submitWithoutReset(action)} className="grid gap-4" noValidate>
       <input type="hidden" name="eventId" value={eventId} />
       <Field label="Participant name" htmlFor="participantName" required error={errors?.participantName}>
         <Input id="participantName" name="participantName" defaultValue={defaults?.name} autoComplete="name" required aria-invalid={!!errors?.participantName} />

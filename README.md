@@ -54,6 +54,7 @@ Payments run through a built-in **sandbox gateway** by default: checkout opens a
 | `npm test` | Unit tests (booking engine, pricing, RBAC, CSV/XLSX export) |
 | `npm run db:generate` | Generate a migration after editing `src/server/db/schema.ts` |
 | `npm run db:migrate` · `db:seed` · `db:reset` | Apply migrations · load demo data · drop everything and rebuild |
+| `npm run db:deploy` | Release step: migrations, then first-run setup (or demo data with `SEED_DEMO_DATA=true`) |
 
 ---
 
@@ -103,7 +104,7 @@ src/
     actions/           server actions (every one validates input and checks permissions)
     queries/           read models for pages
 drizzle/               SQL migrations (incl. the custom EXCLUDE constraint)
-scripts/               migrate, seed, reset
+scripts/               deploy (release step), migrate, seed, reset; lib/ holds the catalogue and demo data
 ```
 
 ### Double booking is impossible
@@ -173,13 +174,15 @@ Conventions: money is stored as integers in **paise**; academy-local dates are `
 - Passwords hashed with scrypt, compared in constant time.
 - Sessions are signed tokens backed by a `sessions` table, so they can be revoked (password change signs out other devices).
 - Cookies are `httpOnly`, `sameSite=lax`, and `secure` in production.
-- Login, registration, booking and contact form submissions are rate-limited.
+- Login, registration, password reset, booking and contact form submissions are rate-limited in Postgres, so limits hold across every server instance.
+- Password reset uses single-use links that expire after 60 minutes; only a hash of the token is stored, the form never reveals whether an email has an account, and a reset signs out every device.
 - Every input is validated with Zod on the server.
 - Server actions get Next.js origin checks, and cookie-authenticated JSON APIs require a same-origin request.
 - Guest booking receipts need an HMAC-signed link, so booking codes can't be enumerated.
 - Uploads are checked by size and magic bytes and served with `nosniff` and a locked-down CSP.
 - CSV exports neutralise spreadsheet formulas.
-- Security headers are set and `x-powered-by` is disabled.
+- A Content-Security-Policy, HSTS and other security headers are set, and `x-powered-by` is disabled.
+- In production the server refuses to start without a strong `AUTH_SECRET`, or with the sandbox payment gateway outside demo mode.
 - Sensitive admin actions are written to `audit_logs`.
 
 ### Caching & performance
@@ -198,18 +201,21 @@ Conventions: money is stored as integers in **paise**; academy-local dates are `
 
 - **Academy content** (name, address, phone, stats, story, testimonials, FAQ, facilities): `src/content/site.ts`.
 - **Courts, prices, peak windows, hours, durations, maintenance**: Dashboard → Courts. No code changes.
-- **Programs, coaches, plans, events, announcements, coupons**: managed in the dashboard. Starting data is in `scripts/seed.ts`.
+- **Programs, coaches, plans, events, announcements, coupons**: managed in the dashboard. The starting catalogue is in `scripts/lib/catalogue.ts` and the demo data in `scripts/lib/demo-seed.ts`.
 - **Photos**: upload coach and student photos from their profile pages. Until then, a styled placeholder with initials is shown.
 - **Design tokens** (colours, shadows, radii, fonts): the `@theme` block in `src/app/globals.css`.
 
 ## Deploying
 
-Works on Vercel, Render, Railway, Fly or any Node host with PostgreSQL.
+See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for step-by-step guides (Vercel + Neon, or Docker on any host), the
+environment variable reference and a post-launch checklist. In short:
 
-1. Provision Postgres (Neon, Supabase, RDS…) and set `DATABASE_URL`.
-2. Set `AUTH_SECRET`, `NEXT_PUBLIC_SITE_URL`, `CRON_SECRET` and the payment/notification variables from `.env.example`.
-3. Run `npm run db:migrate` against the production database. Only run `db:seed` for a demo.
-4. Build: `npm run build`. The build doesn't need database access.
-5. Schedule `GET /api/cron/reminders` hourly. `vercel.json` already does this on Vercel.
+- `npm run db:deploy` is the release step: it applies migrations, then creates the catalogue and the first admin
+  (`ADMIN_EMAIL` / `ADMIN_PASSWORD`) on a new database, or loads the demo academy when `SEED_DEMO_DATA=true`.
+  Vercel runs it during the build; the Docker image runs it on start.
+- In production the server refuses to start with an unsafe configuration, for example the sandbox gateway outside
+  `DEMO_MODE`, and says why in the log.
+- `/api/health` checks the app and database for uptime monitors.
+- Scheduled jobs run from Vercel Cron or the hourly GitHub Actions workflow.
 
-The in-memory rate limiter is per instance. For multi-instance deployments, swap `rateLimit` in `src/server/security.ts` for Redis or Upstash. Uploaded images are stored in Postgres for simplicity, and `src/server/media.ts` is the single place to switch to S3 or R2.
+Uploaded images are stored in Postgres for simplicity; `src/server/media.ts` is the single place to switch to S3 or R2.

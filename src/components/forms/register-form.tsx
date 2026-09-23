@@ -6,6 +6,7 @@ import { UserPlus } from "lucide-react";
 import { register } from "@/server/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Field, FormMessage, Input, RadioCards } from "@/components/ui/form";
+import { submitWithoutReset } from "@/components/forms/submit-without-reset";
 
 export function RegisterForm({ next }: { next?: string }) {
   const [state, action, pending] = useActionState(register, null);
@@ -13,7 +14,7 @@ export function RegisterForm({ next }: { next?: string }) {
   const errors = state && !state.ok ? state.fieldErrors : undefined;
 
   return (
-    <form action={action} className="grid gap-4" noValidate>
+    <form onSubmit={submitWithoutReset(action)} className="grid gap-4" noValidate>
       <input type="hidden" name="next" value={next ?? ""} />
       <RadioCards
         name="accountType"

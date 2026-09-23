@@ -6,6 +6,7 @@ import { submitEnquiry } from "@/server/actions/public";
 import { Button } from "@/components/ui/button";
 import { Field, FormMessage, Input, Select, Textarea } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
+import { submitWithoutReset } from "@/components/forms/submit-without-reset";
 
 const TOPICS = ["General enquiry", "Coaching / Free trial", "Kids Program", "Court booking", "Membership", "Corporate booking", "Events & tournaments"];
 
@@ -23,7 +24,7 @@ export function ContactForm({ defaultTopic }: { defaultTopic?: string }) {
 
   const errors = state && !state.ok ? state.fieldErrors : undefined;
   return (
-    <form ref={formRef} action={action} className="grid gap-4" noValidate>
+    <form ref={formRef} onSubmit={submitWithoutReset(action)} className="grid gap-4" noValidate>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Your name" htmlFor="c-name" required error={errors?.name}>
           <Input id="c-name" name="name" autoComplete="name" aria-invalid={!!errors?.name} required />

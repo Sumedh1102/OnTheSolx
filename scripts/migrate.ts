@@ -1,13 +1,11 @@
 import "dotenv/config";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
+import { runMigrations } from "./lib/migrate";
 
 async function main() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  const db = drizzle(pool);
   console.log("⏳ Running migrations…");
-  await migrate(db, { migrationsFolder: "drizzle" });
+  await runMigrations(pool);
   console.log("✅ Migrations complete");
   await pool.end();
 }

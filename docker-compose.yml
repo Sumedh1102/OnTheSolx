@@ -1,4 +1,5 @@
-# Local PostgreSQL for development: `docker compose up -d`
+# Local PostgreSQL for development:      docker compose up -d
+# Full production-like stack (app + db): docker compose --profile app up --build
 services:
   db:
     image: postgres:16-alpine
@@ -15,6 +16,22 @@ services:
       test: ["CMD-SHELL", "pg_isready -U smashpoint"]
       interval: 5s
       retries: 10
+
+  app:
+    profiles: ["app"]
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://smashpoint:smashpoint@db:5432/smashpoint
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   smashpoint-db:

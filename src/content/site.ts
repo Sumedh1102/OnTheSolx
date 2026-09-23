@@ -10,7 +10,10 @@ export const site = {
   tagline: "Train sharper. Play faster. Book in seconds.",
   description:
     "SmashPoint is Palghar's premier badminton academy — 5 pro-grade courts, certified coaches and structured programs for kids, beginners and competitive players. Book a court online in under a minute.",
-  url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+  url: (
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000")
+  ).replace(/\/+$/, ""),
   founded: 2016,
   contact: {
     phone: "+91 98220 41190",

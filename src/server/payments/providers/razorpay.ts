@@ -80,14 +80,14 @@ export const razorpayProvider: PaymentProvider = {
       payload?: { payment?: { entity?: { id: string; order_id: string; error_description?: string } } };
     };
     const payment = body.payload?.payment?.entity;
-    if (!payment?.order_id) return null;
+    if (!payment?.order_id) return { type: "ignored" };
     if (body.event === "payment.captured" || body.event === "order.paid") {
       return { type: "payment.captured", orderId: payment.order_id, providerPaymentId: payment.id } satisfies WebhookEvent;
     }
     if (body.event === "payment.failed") {
       return { type: "payment.failed", orderId: payment.order_id, providerPaymentId: payment.id, reason: payment.error_description };
     }
-    return null;
+    return { type: "ignored" };
   },
 
   async refund({ providerPaymentId, amount, reason }) {

@@ -6,6 +6,7 @@ import { Button, type ButtonSize, type ButtonVariant } from "@/components/ui/but
 import { Checkbox, Field, FormMessage, Input, Select, Switch, Textarea } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
 import type { FieldErrors } from "@/lib/validation";
+import { submitWithoutReset } from "@/components/forms/submit-without-reset";
 
 type Result = { ok: true; message?: string; data?: unknown } | { ok: false; error: string; fieldErrors?: FieldErrors };
 
@@ -55,7 +56,7 @@ export function ActionForm<S extends Result>({
 
   return (
     <FormCtx.Provider value={{ errors: state && !state.ok ? state.fieldErrors : undefined, pending }}>
-      <form ref={ref} id={id} action={formAction} className={className} noValidate>
+      <form ref={ref} id={id} onSubmit={submitWithoutReset(formAction)} className={className} noValidate>
         {children}
         {showFormError && state && !state.ok && !state.fieldErrors ? (
           <div className="mt-4">

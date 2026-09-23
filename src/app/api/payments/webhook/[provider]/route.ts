@@ -1,4 +1,5 @@
 import { getPaymentProvider } from "@/server/payments";
+import { DomainError } from "@/server/errors";
 import { capturePayment, failPayment } from "@/server/payments/service";
 
 /**
@@ -17,7 +18,10 @@ export async function POST(req: Request, ctx: RouteContext<"/api/payments/webhoo
 
   const raw = await req.text();
   const event = await provider.parseWebhook(raw, req.headers);
-  if (!event) return new Response("Ignored", { status: 400 });
+  if (!event) return new Response("Invalid signature", { status: 401 });
+  // Acknowledge authentic events we don't act on, or the gateway keeps retrying (and may
+  // eventually disable the webhook).
+  if (event.type === "ignored") return new Response("OK");
 
   try {
     if (event.type === "payment.captured") {
@@ -27,6 +31,8 @@ export async function POST(req: Request, ctx: RouteContext<"/api/payments/webhoo
     }
     return new Response("OK");
   } catch (err) {
+    // Orders created outside this app (another integration on the same account) aren't ours.
+    if (err instanceof DomainError && err.code === "NOT_FOUND") return new Response("OK");
     console.error("[webhook] processing failed", err);
     return new Response("Error", { status: 500 });
   }

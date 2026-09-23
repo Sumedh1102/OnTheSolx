@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   let code: string | undefined;
   try {
     assertSameOrigin(req);
-    if (!rateLimit(`booking:${clientIp(req)}`, 20, 10 * 60_000).ok) throw new DomainError("Too many booking attempts. Please wait a few minutes.", "INVALID_INPUT", 429);
+    if (!(await rateLimit(`booking:${clientIp(req)}`, 20, 10 * 60_000)).ok) throw new DomainError("Too many booking attempts. Please wait a few minutes.", "INVALID_INPUT", 429);
 
     const input = bookingRequestSchema.parse(await readJson(req));
     const [user, settings] = await Promise.all([getCurrentUser(), getBookingSettings()]);

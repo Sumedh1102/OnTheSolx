@@ -24,7 +24,7 @@ async function clientKey(prefix: string) {
 export async function submitEnquiry(_prev: ActionResult | null, formData: FormData): Promise<ActionResult> {
   try {
     const input = enquirySchema.parse(formObject(formData));
-    if (!rateLimit(await clientKey("enquiry"), 5, 60 * 60_000).ok) throw new DomainError("Too many messages — please try again later.");
+    if (!(await rateLimit(await clientKey("enquiry"), 5, 60 * 60_000)).ok) throw new DomainError("Too many messages — please try again later.");
     await db.insert(enquiries).values({ name: input.name, email: input.email, phone: input.phone, subject: input.subject, message: input.message });
     return { ok: true, message: "Thanks! Our front desk will get back to you within a few hours." };
   } catch (err) {
@@ -38,7 +38,7 @@ export async function registerForEvent(
 ): Promise<ActionResult<{ checkout?: CheckoutInstruction }>> {
   try {
     const input = eventRegistrationSchema.parse(formObject(formData));
-    if (!rateLimit(await clientKey("event-reg"), 10, 60 * 60_000).ok) throw new DomainError("Too many attempts — please try again later.");
+    if (!(await rateLimit(await clientKey("event-reg"), 10, 60 * 60_000)).ok) throw new DomainError("Too many attempts — please try again later.");
     const user = await getCurrentUser();
 
     const { registration, event } = await db.transaction(async (tx) => {

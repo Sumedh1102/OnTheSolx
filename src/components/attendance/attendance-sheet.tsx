@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { FormMessage, Textarea } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import { submitWithoutReset } from "@/components/forms/submit-without-reset";
 
 type Status = "PRESENT" | "ABSENT" | "LATE" | "LEAVE";
 type Row = { id: string; name: string; studentCode: string; photoUrl: string | null; status: Status | null; remarks: string | null; source: string | null };
@@ -55,7 +56,7 @@ export function AttendanceSheet({
   const records = JSON.stringify(students.map((s) => ({ studentId: s.id, status: statuses[s.id], remarks: remarks[s.id] || undefined })));
 
   return (
-    <form action={formAction} className="grid gap-5">
+    <form onSubmit={submitWithoutReset(formAction)} className="grid gap-5">
       <input type="hidden" name="records" value={records} />
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-3 border-ink bg-white p-3 shadow-brutal-sm">
         <div className="flex flex-wrap gap-2 text-sm font-bold">

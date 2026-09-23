@@ -1,7 +1,20 @@
 import "server-only";
 import { and, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { db } from "@/server/db";
-import { batchStudents, batches, bookings, courts, memberships, membershipPlans, notifications, parents, students } from "@/server/db/schema";
+import {
+  batchStudents,
+  batches,
+  bookings,
+  courts,
+  memberships,
+  membershipPlans,
+  notifications,
+  parents,
+  passwordResetTokens,
+  rateLimits,
+  sessions,
+  students,
+} from "@/server/db/schema";
 import { formatDate, formatTimeRange } from "@/lib/format";
 import { addDays, dayOfWeek, todayInTz } from "@/lib/time";
 import { notify } from "@/server/notifications";
@@ -131,5 +144,10 @@ export async function runScheduledJobs() {
       result.classReminders++;
     }
   }
+
+  // Housekeeping: expired sessions, spent rate-limit windows and old reset links.
+  await db.delete(sessions).where(lt(sessions.expiresAt, new Date()));
+  await db.delete(rateLimits).where(lt(rateLimits.resetAt, new Date()));
+  await db.delete(passwordResetTokens).where(lt(passwordResetTokens.expiresAt, new Date(Date.now() - 86_400_000)));
   return result;
 }

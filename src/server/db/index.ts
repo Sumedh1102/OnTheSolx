@@ -14,10 +14,14 @@ function createPool() {
   if (!connectionString) {
     throw new Error("DATABASE_URL is not set. Copy .env.example to .env and configure PostgreSQL.");
   }
+  // Serverless instances are many and short-lived: keep each one's pool small and let idle
+  // connections go quickly. Use your provider's pooled URL (e.g. Neon "-pooler") there.
+  const serverless = !!process.env.VERCEL;
   return new Pool({
     connectionString,
-    max: Number(process.env.DATABASE_POOL_MAX ?? 10),
-    idleTimeoutMillis: 30_000,
+    max: Number(process.env.DATABASE_POOL_MAX ?? (serverless ? 5 : 10)),
+    idleTimeoutMillis: serverless ? 5_000 : 30_000,
+    connectionTimeoutMillis: 10_000,
   });
 }
 

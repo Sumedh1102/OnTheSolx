@@ -17,3 +17,5 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Only export async actions from `"use server"` files; shared helpers go in `src/server/*`.
 - Booking overlap is enforced by the `bookings_no_overlap` EXCLUDE constraint (`drizzle/0001_booking_constraints.sql`) as well as the row lock in `createBooking`; keep both.
 - After mutating cached public data, call `invalidate(TAGS.x)` from `src/server/cache.ts`.
+- Client forms dispatch server actions via `submitWithoutReset` (`src/components/forms/submit-without-reset.ts`); a plain `<form action={fn}>` makes React 19 wipe the fields whenever the action returns an error.
+- Release step: `npm run db:deploy` (`scripts/deploy.ts`) runs migrations then first-run setup. The starting catalogue is in `scripts/lib/catalogue.ts`; demo data in `scripts/lib/demo-seed.ts`. Deployment guide: `docs/DEPLOYMENT.md`.

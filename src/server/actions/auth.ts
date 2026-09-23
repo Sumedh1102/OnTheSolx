@@ -2,6 +2,7 @@
 
 import { eq, sql } from "drizzle-orm";
 import { headers } from "next/headers";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/server/db";
@@ -10,6 +11,7 @@ import { DUMMY_HASH, hashPassword, verifyPassword } from "@/server/auth/password
 import { createSession, destroySession } from "@/server/auth/session";
 import { DomainError, isUniqueViolation } from "@/server/errors";
 import { randomToken, rateLimit } from "@/server/security";
+import { resetPasswordWithToken, sendPasswordResetLink } from "@/server/services/password-reset";
 import { nextStudentCode } from "@/server/services/students";
 import { emailSchema, isoDate, loginSchema, nameSchema, passwordSchema, phoneSchema } from "@/lib/validation";
 import { todayInTz } from "@/lib/time";
@@ -33,7 +35,7 @@ export async function login(_prev: ActionResult | null, formData: FormData): Pro
   try {
     const input = loginSchema.parse(formObject(formData));
     next = safeNext(input.next);
-    const limiter = rateLimit(`login:${await ip()}:${input.email}`, 8, 15 * 60_000);
+    const limiter = await rateLimit(`login:${await ip()}:${input.email}`, 8, 15 * 60_000);
     if (!limiter.ok) throw new DomainError("Too many attempts. Please wait a few minutes and try again.");
 
     const [user] = await db.select().from(users).where(eq(sql`lower(${users.email})`, input.email)).limit(1);
@@ -70,7 +72,7 @@ export async function register(_prev: ActionResult | null, formData: FormData): 
   try {
     const input = registerFormSchema.parse(formObject(formData));
     next = safeNext(input.next);
-    if (!rateLimit(`register:${await ip()}`, 5, 60 * 60_000).ok) throw new DomainError("Too many sign-ups from this network. Try again later.");
+    if (!(await rateLimit(`register:${await ip()}`, 5, 60 * 60_000)).ok) throw new DomainError("Too many sign-ups from this network. Try again later.");
 
     const [existing] = await db.select({ id: users.id }).from(users).where(eq(sql`lower(${users.email})`, input.email)).limit(1);
     if (existing) return { ok: false, error: "An account with this email already exists. Try signing in.", fieldErrors: { email: ["Already registered"] } };
@@ -112,6 +114,39 @@ export async function register(_prev: ActionResult | null, formData: FormData): 
     return toActionError(err);
   }
   redirect(next);
+}
+
+const forgotSchema = z.object({ email: emailSchema });
+
+/** Always reports success so the form can't be used to check which emails have accounts. */
+export async function requestPasswordReset(_prev: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  try {
+    const { email } = forgotSchema.parse(formObject(formData));
+    const byIp = await rateLimit(`reset-ip:${await ip()}`, 10, 60 * 60_000);
+    const byEmail = await rateLimit(`reset-email:${email}`, 3, 60 * 60_000);
+    if (!byIp.ok) throw new DomainError("Too many requests from this network. Please try again later.");
+    // Sent after the response so timing doesn't reveal whether the account exists.
+    if (byEmail.ok) after(() => sendPasswordResetLink(email).catch((err) => console.error("[password-reset] failed", err)));
+    return { ok: true, message: "If an account exists for that email, a reset link is on its way. It expires in 60 minutes." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+const resetSchema = z
+  .object({ token: z.string().min(20).max(100), password: passwordSchema, confirm: z.string() })
+  .refine((v) => v.password === v.confirm, { path: ["confirm"], message: "Passwords don't match" });
+
+export async function resetPassword(_prev: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  try {
+    const input = resetSchema.parse(formObject(formData));
+    if (!(await rateLimit(`reset-submit:${await ip()}`, 20, 60 * 60_000)).ok) throw new DomainError("Too many attempts. Please try again later.");
+    const ok = await resetPasswordWithToken(input.token, input.password);
+    if (!ok) throw new DomainError("This reset link is invalid or has expired. Please request a new one.");
+  } catch (err) {
+    return toActionError(err);
+  }
+  redirect("/login?reset=1");
 }
 
 export async function logout() {

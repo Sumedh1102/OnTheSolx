@@ -35,7 +35,9 @@ export type VerifyInput = { orderId: string; providerPaymentId: string; signatur
 
 export type WebhookEvent =
   | { type: "payment.captured"; orderId: string; providerPaymentId: string }
-  | { type: "payment.failed"; orderId: string; providerPaymentId?: string; reason?: string };
+  | { type: "payment.failed"; orderId: string; providerPaymentId?: string; reason?: string }
+  /** Authentic, but nothing for us to do (other event types). */
+  | { type: "ignored" };
 
 export interface PaymentProvider {
   readonly id: string;
@@ -43,7 +45,7 @@ export interface PaymentProvider {
   createOrder(input: CreateOrderInput): Promise<{ orderId: string; checkout: CheckoutInstruction }>;
   /** Verifies the client-side success callback (signature check — never trust the browser alone). */
   verifyPayment(input: VerifyInput): Promise<boolean>;
-  /** Verifies and parses a server-to-server webhook. Returns null for irrelevant events. */
+  /** Verifies and parses a server-to-server webhook. Returns null when the signature is invalid. */
   parseWebhook?(rawBody: string, headers: Headers): Promise<WebhookEvent | null>;
   refund(input: { providerPaymentId: string; amount: number; reason?: string }): Promise<{ refundId: string }>;
 }
