@@ -1,0 +1,11 @@
+# Files the Vercel CLI must not upload with the source.
+.env
+.env.*
+!.env.example
+.git
+.github
+node_modules
+.next
+dist
+coverage
+docs

@@ -118,22 +118,43 @@ api() {
   curl "${args[@]}" "$url"
 }
 
+# `vercel link` writes a short-lived OIDC token to .env.local; it must not be uploaded.
+rm -f .env.local
+
 echo "▶ Configuring environment variables"
-EXISTING=$(api GET "/v9/projects/$PROJECT_ID/env" | jq -r '.envs[]?.key')
+ENV_JSON=$(api GET "/v9/projects/$PROJECT_ID/env?decrypt=true")
 set_env() {
   api POST "/v10/projects/$PROJECT_ID/env?upsert=true" \
     "$(jq -nc --arg k "$1" --arg v "$2" '[{key: $k, value: $v, type: "encrypted", target: ["production", "preview"]}]')" >/dev/null
   echo "  set $1"
 }
-missing() { ! grep -qx "$1" <<<"$EXISTING"; }
+# A secret is kept only if Production can read it and it's long enough (the app refuses to
+# start with a short or placeholder AUTH_SECRET). Anything else is replaced.
+usable_secret() {
+  jq -e --arg k "$1" --argjson n "$2" '[.envs[]? | select(.key == $k and ((.target // []) | index("production")) and ((.value // "") | length >= $n) and ((.value // "") | test("^change-me") | not))] | length > 0' <<<"$ENV_JSON" >/dev/null
+}
+remove_env() {
+  for id in $(jq -r --arg k "$1" '.envs[]? | select(.key == $k) | .id' <<<"$ENV_JSON"); do
+    api DELETE "/v9/projects/$PROJECT_ID/env/$id" >/dev/null
+  done
+}
+ensure_secret() { # key min-length generator...
+  local key=$1 min=$2; shift 2
+  if usable_secret "$key" "$min"; then
+    echo "  kept $key"
+  else
+    remove_env "$key"
+    set_env "$key" "$("$@")"
+  fi
+}
 
 set_env DATABASE_URL "$DATABASE_URL"
 set_env DEMO_MODE true
 set_env SEED_DEMO_DATA true
 set_env PAYMENT_PROVIDER mock
 # Generated once and then kept, so redeploys don't sign everyone out.
-if missing AUTH_SECRET; then set_env AUTH_SECRET "$(openssl rand -base64 32)"; fi
-if missing CRON_SECRET; then set_env CRON_SECRET "$(openssl rand -hex 24)"; fi
+ensure_secret AUTH_SECRET 32 openssl rand -base64 32
+ensure_secret CRON_SECRET 16 openssl rand -hex 24
 
 echo "▶ Deploying (built on Vercel; the build applies migrations and loads the demo data on first deploy)"
 DEPLOY_URL=$("${V[@]}" deploy --prod --yes)
