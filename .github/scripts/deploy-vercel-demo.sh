@@ -17,6 +17,29 @@ if [[ -z $DB_URL ]]; then
 fi
 DATABASE_URL=$DB_URL
 
+# Run the functions next to the database: every page makes several queries, so a function in
+# Mumbai talking to a database in Ohio would add seconds. Map the AWS region in the host
+# (e.g. Neon's ep-…-pooler.us-east-2.aws.neon.tech) to the nearest Vercel region.
+DB_HOST=$(sed -E 's#^[a-z]+://([^@/]*@)?([^/:?]+).*#\2#' <<<"$DATABASE_URL")
+case "$DB_HOST" in
+  *ap-south-1*) FN_REGION=bom1 ;;
+  *us-east-1*) FN_REGION=iad1 ;;
+  *us-east-2*) FN_REGION=cle1 ;;
+  *us-west-2*) FN_REGION=pdx1 ;;
+  *eu-central-1*) FN_REGION=fra1 ;;
+  *eu-west-1*) FN_REGION=dub1 ;;
+  *eu-west-2*) FN_REGION=lhr1 ;;
+  *ap-southeast-1*) FN_REGION=sin1 ;;
+  *ap-southeast-2*) FN_REGION=syd1 ;;
+  *ap-northeast-1*) FN_REGION=hnd1 ;;
+  *sa-east-1*) FN_REGION=gru1 ;;
+  *) FN_REGION="" ;;
+esac
+if [[ -n $FN_REGION ]]; then
+  jq --arg r "$FN_REGION" '.regions = [$r]' vercel.json > vercel.json.tmp && mv vercel.json.tmp vercel.json
+  echo "▶ Database region detected; functions will run in Vercel region $FN_REGION"
+fi
+
 echo "▶ Checking the Vercel token"
 vget() { curl -sS -o "$2" -w '%{http_code}' -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com$1" || echo 000; }
 err() { jq -c '.error // {}' "$1" 2>/dev/null || true; }
