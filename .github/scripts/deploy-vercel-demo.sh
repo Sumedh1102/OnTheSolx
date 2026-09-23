@@ -156,6 +156,16 @@ set_env PAYMENT_PROVIDER mock
 ensure_secret AUTH_SECRET 32 openssl rand -base64 32
 ensure_secret CRON_SECRET 16 openssl rand -hex 24
 
+# Real-academy settings (e.g. pasted from .env.example) don't belong in the demo and some break
+# it: a localhost NEXT_PUBLIC_SITE_URL ends up in links and metadata (without it the app uses
+# the Vercel production URL), and ADMIN_* with a placeholder password fails later builds.
+for key in NEXT_PUBLIC_SITE_URL ADMIN_EMAIL ADMIN_PASSWORD ADMIN_NAME RAZORPAY_KEY_ID RAZORPAY_KEY_SECRET RAZORPAY_WEBHOOK_SECRET SMS_PROVIDER_API_KEY WHATSAPP_PROVIDER_API_KEY; do
+  if jq -e --arg k "$key" 'any(.envs[]?; .key == $k)' <<<"$ENV_JSON" >/dev/null; then
+    remove_env "$key"
+    echo "  removed $key (not used by the demo)"
+  fi
+done
+
 echo "▶ Deploying (built on Vercel; the build applies migrations and loads the demo data on first deploy)"
 DEPLOY_URL=$("${V[@]}" deploy --prod --yes)
 echo "  deployment: $DEPLOY_URL"
