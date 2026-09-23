@@ -19,30 +19,53 @@ DATABASE_URL=$DB_URL
 
 echo "▶ Checking the Vercel token"
 vget() { curl -sS -o "$2" -w '%{http_code}' -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com$1" || echo 000; }
+err() { jq -c '.error // {}' "$1" 2>/dev/null || true; }
 USER_CODE=$(vget /v2/user /tmp/vercel-user.json)
 TEAMS_CODE=$(vget /v2/teams /tmp/vercel-teams.json)
+TOKEN_CODE=$(vget /v5/user/tokens/current /tmp/vercel-token.json)
 if [[ $USER_CODE == 200 ]]; then
-  echo "  token belongs to: $(jq -r '.user.username // .user.email // "?"' /tmp/vercel-user.json)"
+  echo "  account: $(jq -r '.user.username // .user.email // "?"' /tmp/vercel-user.json)"
 else
-  echo "  /v2/user → HTTP $USER_CODE $(jq -c '.error // {}' /tmp/vercel-user.json 2>/dev/null || true)"
+  echo "  /v2/user → HTTP $USER_CODE $(err /tmp/vercel-user.json)"
 fi
 if [[ $TEAMS_CODE == 200 ]]; then
   echo "  teams: $(jq -r '[.teams[]?.slug] | if length == 0 then "(none)" else join(", ") end' /tmp/vercel-teams.json)"
 else
-  echo "  /v2/teams → HTTP $TEAMS_CODE $(jq -c '.error // {}' /tmp/vercel-teams.json 2>/dev/null || true)"
+  echo "  /v2/teams → HTTP $TEAMS_CODE $(err /tmp/vercel-teams.json)"
 fi
-if [[ $USER_CODE != 200 && $TEAMS_CODE != 200 ]]; then
+if [[ $TOKEN_CODE == 200 ]]; then
+  # Token metadata only (type, origin, team scopes, expiry), never the token itself.
+  echo "  token: $(jq -c '.token | {type, origin, expiresAt, scopes: [.scopes[]? | {type, teamId}]}' /tmp/vercel-token.json 2>/dev/null || true)"
+else
+  echo "  /v5/user/tokens/current → HTTP $TOKEN_CODE $(err /tmp/vercel-token.json)"
+fi
+
+# Deploy into: an explicit VERCEL_SCOPE (team slug or id), else the account's default team,
+# else the team the token is limited to, else the first team it can list.
+TEAM="${VERCEL_SCOPE:-}"
+if [[ -z $TEAM && $USER_CODE == 200 ]]; then TEAM=$(jq -r '.user.defaultTeamId // empty' /tmp/vercel-user.json); fi
+if [[ -z $TEAM && $TOKEN_CODE == 200 ]]; then TEAM=$(jq -r '[.token.scopes[]? | select(.type == "team") | .teamId][0] // empty' /tmp/vercel-token.json); fi
+if [[ -z $TEAM && $TEAMS_CODE == 200 ]]; then TEAM=$(jq -r '.teams[0].id // empty' /tmp/vercel-teams.json); fi
+
+if [[ $USER_CODE != 200 && -z $TEAM ]]; then
   reason=$(jq -r '.error.message // empty' /tmp/vercel-user.json 2>/dev/null || true)
-  echo "::error::Vercel rejected VERCEL_TOKEN${reason:+ ($reason)}. Create a new token at https://vercel.com/account/tokens (scope: your Hobby team, expiry in the future), copy it exactly, and replace the VERCEL_TOKEN repository secret."
+  echo "::error::Vercel won't identify VERCEL_TOKEN${reason:+ ($reason)}, so it isn't a usable account token. Create one at https://vercel.com/account/settings/tokens (Scope: your Hobby team; Expiration: 30 or 90 days), copy it right away, and use it to update the VERCEL_TOKEN repository secret."
   exit 1
 fi
 
-# Deploy into the token's team: an explicit VERCEL_SCOPE, else the account's default team,
-# else the first team the token can see (a team-scoped token can't create personal projects).
-SCOPE="${VERCEL_SCOPE:-}"
-if [[ -z $SCOPE && $TEAMS_CODE == 200 ]]; then
-  DEFAULT_TEAM=$(jq -r '.user.defaultTeamId // empty' /tmp/vercel-user.json 2>/dev/null || true)
-  SCOPE=$(jq -r --arg d "$DEFAULT_TEAM" '(.teams // []) as $t | (($t | map(select(.id == $d)) | .[0].slug) // $t[0].slug) // empty' /tmp/vercel-teams.json)
+SCOPE=""
+if [[ -n $TEAM ]]; then
+  SCOPE=$TEAM
+  if [[ $TEAM == team_* ]]; then
+    # The CLI's --scope wants the team slug: from the team list if we have it, else look it up.
+    SLUG=""
+    if [[ $TEAMS_CODE == 200 ]]; then SLUG=$(jq -r --arg id "$TEAM" '[.teams[]? | select(.id == $id) | .slug][0] // empty' /tmp/vercel-teams.json 2>/dev/null || true); fi
+    if [[ -z $SLUG ]]; then
+      code=$(vget "/v2/teams/$TEAM" /tmp/vercel-team.json)
+      if [[ $code == 200 ]]; then SLUG=$(jq -r '.slug // empty' /tmp/vercel-team.json 2>/dev/null || true); else echo "  /v2/teams/$TEAM → HTTP $code $(err /tmp/vercel-team.json)"; fi
+    fi
+    SCOPE=${SLUG:-$TEAM}
+  fi
 fi
 V=(vercel --token "$VERCEL_TOKEN")
 if [[ -n $SCOPE ]]; then
